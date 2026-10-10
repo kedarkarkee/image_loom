@@ -460,6 +460,33 @@ void main() {
       final s = plan(const ScaleToFit(Size(333, 111)));
       expect(s.size.width / s.size.height, closeTo(2, 1e-9));
     });
+
+    test('contain fits inside target without changing aspect ratio', () {
+      const target = Size(100, 100);
+      final s = plan(const ScaleToFit(target));
+
+      expectSize(s, const Size(100, 50));
+      expect(s.size.width, lessThanOrEqualTo(target.width));
+      expect(s.size.height, lessThanOrEqualTo(target.height));
+      expect(s.size.width / s.size.height, closeTo(2, 1e-9));
+    });
+
+    test('cover fills target but can exceed its dimensions', () {
+      const target = Size(100, 100);
+      final s = plan(const ScaleToFit(target, cover: true));
+
+      expectSize(s, const Size(200, 100));
+      expect(s.size.width, greaterThanOrEqualTo(target.width));
+      expect(s.size.height, greaterThanOrEqualTo(target.height));
+      expect(s.size.width / s.size.height, closeTo(2, 1e-9));
+    });
+
+    test('cover does not crop the transformed image', () {
+      final s = plan(const ScaleToFit(Size(100, 100), cover: true));
+
+      expectMaps(s, Offset.zero, Offset.zero);
+      expectMaps(s, const Offset(400, 200), const Offset(200, 100));
+    });
   });
 
   group('Transpose', () {
