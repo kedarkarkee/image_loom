@@ -34,6 +34,9 @@ class ImageLoom {
     return state;
   }
 
+  /// Plans a single image operation. See [plan]
+  GeometryState planOne(ImageOperation operation) => plan([operation]);
+
   /// Applies [operations] in order.
   /// Returns [outputPath] on success.
   Future<String?> apply(
@@ -51,6 +54,21 @@ class ImageLoom {
       outHeight: math.max(1, state.size.height.round()),
       format: format.name,
       quality: quality.clamp(1, 100),
+    );
+  }
+
+  /// Applies a single image operation. See [apply]
+  Future<String?> applyOne(
+    ImageOperation operation, {
+    required String outputPath,
+    OutputFormat format = OutputFormat.jpeg,
+    int quality = 92,
+  }) {
+    return apply(
+      [operation],
+      outputPath: outputPath,
+      format: format,
+      quality: quality,
     );
   }
 }
