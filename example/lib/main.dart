@@ -1,9 +1,12 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:image_loom/image_loom.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
+
+import 'crop_dialog.dart';
 
 void main() {
   runApp(const MyApp());
@@ -43,12 +46,25 @@ class _HomePageState extends State<HomePage> {
   Duration? _elapsed;
   String? _error;
 
+  // Planned (from the Dart matrix) vs actual (read back from the file).
+  Size? _expectedSize;
+  Size? _actualSize;
+  int? _outputBytes;
+
   List<OutputFormat> get _formats => [
     OutputFormat.jpeg,
     OutputFormat.png,
     if (Platform.isAndroid) OutputFormat.webp,
     if (Platform.isIOS || Platform.isMacOS) OutputFormat.heic,
   ];
+
+  void _resetResult() {
+    _outputPath = null;
+    _elapsed = null;
+    _expectedSize = null;
+    _actualSize = null;
+    _outputBytes = null;
+  }
 
   Future<void> _pick() async {
     final file = await _picker.pickImage(source: ImageSource.gallery);
@@ -58,8 +74,7 @@ class _HomePageState extends State<HomePage> {
       setState(() {
         _loom = loom;
         _ops.clear();
-        _outputPath = null;
-        _elapsed = null;
+        _resetResult();
         _error = null;
       });
     } catch (e) {
@@ -69,27 +84,31 @@ class _HomePageState extends State<HomePage> {
 
   void _add(ImageOperation op) => setState(() {
     _ops.add(op);
-    _outputPath = null;
+    _resetResult();
   });
 
   void _undo() {
     if (_ops.isEmpty) return;
     setState(() {
       _ops.removeLast();
-      _outputPath = null;
+      _resetResult();
     });
   }
 
   void _clear() => setState(() {
     _ops.clear();
-    _outputPath = null;
+    _resetResult();
   });
 
-  /// Crops the centre 50% of the canvas as it is at this point in the pipeline.
-  void _addCenterCrop() {
-    final size = _loom!.plan(_ops).size;
-    final w = size.width / 2, h = size.height / 2;
-    _add(Crop(Rect.fromLTWH(size.width / 4, size.height / 4, w, h)));
+  Future<void> _openCropDialog() async {
+    final loom = _loom;
+    if (loom == null) return;
+    final rect = await showDialog<Rect>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => CropDialog(loom: loom, operations: List.of(_ops)),
+    );
+    if (rect != null && mounted) _add(Crop(rect));
   }
 
   Future<void> _render() async {
@@ -105,6 +124,13 @@ class _HomePageState extends State<HomePage> {
       final out =
           '${dir.path}/loom_${DateTime.now().microsecondsSinceEpoch}.$ext';
 
+      // Same rounding that ImageLoom.apply uses for the native output size.
+      final planned = loom.plan(_ops).size;
+      final expected = Size(
+        math.max(1, planned.width.round()).toDouble(),
+        math.max(1, planned.height.round()).toDouble(),
+      );
+
       final sw = Stopwatch()..start();
       final res = await loom.apply(
         _ops,
@@ -113,15 +139,24 @@ class _HomePageState extends State<HomePage> {
         quality: _quality.round(),
       );
       sw.stop();
+      if (res == null) throw StateError('Native render returned no path');
 
+      // Read the real size back through the native header reader.
+      final actual = (await ImageLoom.open(res)).size;
+      final bytes = await File(res).length();
+
+      if (!mounted) return;
       setState(() {
         _outputPath = res;
         _elapsed = sw.elapsed;
+        _expectedSize = expected;
+        _actualSize = actual;
+        _outputBytes = bytes;
       });
     } catch (e) {
-      setState(() => _error = '$e');
+      if (mounted) setState(() => _error = '$e');
     } finally {
-      setState(() => _busy = false);
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -141,6 +176,10 @@ class _HomePageState extends State<HomePage> {
     }
     return op.runtimeType.toString();
   }
+
+  String _formatBytes(int b) => b >= 1024 * 1024
+      ? '${(b / (1024 * 1024)).toStringAsFixed(2)} MB'
+      : '${(b / 1024).toStringAsFixed(0)} KB';
 
   @override
   Widget build(BuildContext context) {
@@ -198,12 +237,52 @@ class _HomePageState extends State<HomePage> {
                   ),
                 if (_outputPath != null) ...[
                   const SizedBox(height: 16),
-                  Text('Done in ${_elapsed!.inMilliseconds} ms'),
-                  const SizedBox(height: 8),
+                  _dimensionCheck(),
+                  const SizedBox(height: 12),
                   _preview('Result', _outputPath!),
                 ],
               ],
             ),
+    );
+  }
+
+  Widget _dimensionCheck() {
+    final p = _expectedSize!;
+    final a = _actualSize!;
+    final ok = p == a;
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    String dims(Size s) => '${s.width.round()} × ${s.height.round()}';
+
+    return Card(
+      color: ok ? scheme.primaryContainer : scheme.errorContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(ok ? Icons.check_circle : Icons.error),
+                const SizedBox(width: 8),
+                Text(
+                  ok ? 'Planned and actual sizes match' : 'Size mismatch',
+                  style: textTheme.titleSmall,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text('Planned: ${dims(p)}'),
+            Text('Actual:  ${dims(a)}'),
+            const SizedBox(height: 4),
+            Text(
+              'Done in ${_elapsed!.inMilliseconds} ms · ${_formatBytes(_outputBytes!)}',
+              style: textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -249,9 +328,10 @@ class _HomePageState extends State<HomePage> {
               onPressed: () => _add(const Flip(vertical: true)),
               child: const Text('Flip V'),
             ),
-            OutlinedButton(
-              onPressed: _addCenterCrop,
-              child: const Text('Crop centre 50%'),
+            OutlinedButton.icon(
+              onPressed: _openCropDialog,
+              icon: const Icon(Icons.crop),
+              label: const Text('Crop…'),
             ),
           ],
         ),
