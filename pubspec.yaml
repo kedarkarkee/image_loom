@@ -40,8 +40,10 @@ flutter:
         pluginClass: ImageLoomPlugin
       ios:
         pluginClass: ImageLoomPlugin
+        sharedDarwinSource: true
       macos:
         pluginClass: ImageLoomPlugin
+        sharedDarwinSource: true
 
   # To add assets to your plugin package, add an assets section, like this:
   # assets:
