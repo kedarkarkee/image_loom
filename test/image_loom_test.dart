@@ -175,6 +175,21 @@ void main() {
       expectMaps(s, red, red);
       expectMaps(s, yellow, yellow);
     });
+
+    test('negative 90 equals positive 270', () {
+      final negative = plan(const Rotate(-90));
+      final positive = plan(const Rotate(270));
+
+      expect(negative.size, positive.size);
+      expect(negative.toAffine(), positive.toAffine());
+    });
+
+    test('360 preserves exact dimensions and identity matrix', () {
+      final s = plan(const Rotate(360));
+
+      expect(s.size, src);
+      expect(s.toAffine(), [1, 0, 0, 1, 0, 0]);
+    });
   });
 
   group('Crop', () {
