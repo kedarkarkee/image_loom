@@ -368,6 +368,31 @@ void main() {
         expect(b.bottom, closeTo(s.size.height, 1e-6));
       }
     });
+
+    test('negative x skew shifts content into non-negative bounds', () {
+      final s = plan(const Skew(xDegrees: -45));
+
+      expectSize(s, const Size(600, 200));
+      expectMaps(s, red, const Offset(250, 50));
+      expectMaps(s, blue, const Offset(150, 150));
+
+      final b = cornerBounds(s);
+      expect(b.left, closeTo(0, 1e-6));
+      expect(b.top, closeTo(0, 1e-6));
+      expect(b.right, closeTo(s.size.width, 1e-6));
+      expect(b.bottom, closeTo(s.size.height, 1e-6));
+    });
+
+    test('combined skew keeps all corners within output bounds', () {
+      final s = plan(const Skew(xDegrees: 15, yDegrees: -25));
+
+      final b = cornerBounds(s);
+
+      expect(b.left, closeTo(0, 1e-6));
+      expect(b.top, closeTo(0, 1e-6));
+      expect(b.right, closeTo(s.size.width, 1e-6));
+      expect(b.bottom, closeTo(s.size.height, 1e-6));
+    });
   });
 
   group('CropToAspect', () {
