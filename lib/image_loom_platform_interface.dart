@@ -28,4 +28,16 @@ abstract class ImageLoomPlatform extends PlatformInterface {
   Future<Size> getImageSize(String path) async {
     throw UnimplementedError('getImageSize() has not been implemented.');
   }
+
+  Future<String?> render({
+    required String inputPath,
+    required String outputPath,
+    required List<double> affine,
+    required int outWidth,
+    required int outHeight,
+    required String format,
+    required int quality,
+  }) async {
+    throw UnimplementedError('render() has not been implemented.');
+  }
 }

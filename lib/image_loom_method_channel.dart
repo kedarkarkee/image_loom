@@ -16,4 +16,26 @@ class MethodChannelImageLoom extends ImageLoomPlatform {
     });
     return Size(m!['width']!.toDouble(), m['height']!.toDouble());
   }
+
+  @override
+  Future<String?> render({
+    required String inputPath,
+    required String outputPath,
+    required List<double> affine,
+    required int outWidth,
+    required int outHeight,
+    required String format,
+    required int quality,
+  }) async {
+    final res = await methodChannel.invokeMethod<String>('render', {
+      'path': inputPath,
+      'outputPath': outputPath,
+      'affine': affine,
+      'outWidth': outWidth,
+      'outHeight': outHeight,
+      'format': format,
+      'quality': quality,
+    });
+    return res;
+  }
 }
