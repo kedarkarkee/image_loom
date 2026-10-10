@@ -223,6 +223,29 @@ void main() {
     test('empty rect throws', () {
       expect(() => plan(Crop(Rect.zero)), throwsArgumentError);
     });
+
+    test('partially out-of-bounds crop is clipped correctly', () {
+      final s = plan(const Crop(Rect.fromLTWH(300, 100, 200, 200)));
+
+      expectSize(s, const Size(100, 100));
+      expectMaps(s, const Offset(300, 100), Offset.zero);
+      expectMaps(s, yellow, const Offset(0, 50));
+    });
+
+    test('crop extending beyond right edge is clipped', () {
+      final s = plan(const Crop(Rect.fromLTWH(350, 0, 100, 100)));
+
+      expectSize(s, const Size(50, 100));
+      expectMaps(s, const Offset(350, 0), Offset.zero);
+      expectMaps(s, const Offset(400, 100), const Offset(50, 100));
+    });
+
+    test('completely outside crop throws ArgumentError', () {
+      expect(
+        () => plan(const Crop(Rect.fromLTWH(500, 500, 10, 10))),
+        throwsArgumentError,
+      );
+    });
   });
 
   group('Resize', () {
