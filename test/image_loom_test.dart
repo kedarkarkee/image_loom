@@ -559,4 +559,33 @@ void main() {
       ]);
     });
   });
+
+  group('invalid inputs', () {
+    test('zero resize dimensions throw ArgumentError', () {
+      expect(() => plan(const Resize(Size.zero)), throwsArgumentError);
+    });
+
+    test('negative resize dimensions throw ArgumentError', () {
+      expect(() => plan(const Resize(Size(-100, 100))), throwsArgumentError);
+    });
+
+    test('zero scale throws ArgumentError', () {
+      expect(() => plan(const Scale(0)), throwsArgumentError);
+    });
+
+    test('negative scale throws ArgumentError', () {
+      expect(() => plan(const Scale(-1)), throwsArgumentError);
+    });
+
+    test('empty crop throws ArgumentError', () {
+      expect(() => plan(const Crop(Rect.zero)), throwsArgumentError);
+    });
+
+    test('completely outside crop throws ArgumentError', () {
+      expect(
+        () => plan(const Crop(Rect.fromLTWH(500, 500, 10, 10))),
+        throwsArgumentError,
+      );
+    });
+  });
 }
