@@ -9,20 +9,25 @@ import 'image_operation.dart';
 enum OutputFormat { jpeg, png, webp, heic }
 
 class ImageLoom {
-  ImageLoom(this.path);
+  /// Constructs an ImageLoom object when the upright size is already known.
+  /// Use [ImageLoom.open] if upright (EXIF-applied) size is unknown.
+  const ImageLoom.withSize(this.path, this.size);
+
+  /// Reads the upright (EXIF-applied) size natively, then returns a ready instance.
+  static Future<ImageLoom> open(String path) async {
+    final size = await ImageLoomPlatform.instance.getImageSize(path);
+    return ImageLoom.withSize(path, size);
+  }
 
   /// Path of the source image file.
   final String path;
 
-  Size? _size;
-
-  /// Upright (EXIF-applied) size in pixels. Read once, then cached.
-  Future<Size> get size async =>
-      _size ??= await ImageLoomPlatform.instance.getImageSize(path);
+  /// Size of the image in pixels. Upright (EXIF-applied).
+  final Size size;
 
   /// Folds [operations] into one matrix and output size.
-  Future<GeometryState> plan(List<ImageOperation> operations) async {
-    var state = GeometryState.identity(await size);
+  GeometryState plan(List<ImageOperation> operations) {
+    var state = GeometryState.identity(size);
     for (final op in operations) {
       state = op.apply(state);
     }
@@ -37,7 +42,7 @@ class ImageLoom {
     OutputFormat format = OutputFormat.jpeg,
     int quality = 92,
   }) async {
-    final state = await plan(operations);
+    final state = plan(operations);
     return ImageLoomPlatform.instance.render(
       inputPath: path,
       outputPath: outputPath,
