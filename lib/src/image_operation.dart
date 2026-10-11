@@ -50,7 +50,7 @@ abstract class ImageOperation {
   /// {@macro image_operation.scale}
   const factory ImageOperation.scale(double factor) = Scale;
 
-  /// {@macro image_operation.rotate}
+  /// {@macro image_operation.scaleToFit}
   const factory ImageOperation.scaleToFit(Size box, {bool cover}) = ScaleToFit;
 
   /// {@macro image_operation.skew}
