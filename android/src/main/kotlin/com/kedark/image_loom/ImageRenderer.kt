@@ -14,8 +14,10 @@ import java.io.File
 import java.io.FileOutputStream
 import kotlin.math.ceil
 import kotlin.math.floor
+import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
+import androidx.core.graphics.createBitmap
 
 internal object ImageRenderer {
     class Info(val storedW: Int, val storedH: Int, val orientation: Int) {
@@ -24,10 +26,19 @@ internal object ImageRenderer {
         val uprightH get() = if (swap) storedW else storedH
     }
 
+    /** A decoded piece. Bitmap pixel (px, py) is stored pixel (left + px * scaleX, top + py * scaleY). */
+    private class Decoded(
+        val bitmap: Bitmap,
+        val left: Float,
+        val top: Float,
+        val scaleX: Float,
+        val scaleY: Float,
+    )
+
     fun readInfo(path: String): Info {
-        val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeFile(path, o)
-        require(o.outWidth > 0 && o.outHeight > 0) { "Cannot decode image bounds" }
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(path, bounds)
+        require(bounds.outWidth > 0 && bounds.outHeight > 0) { "Cannot decode image bounds" }
         val orientation = try {
             ExifInterface(path).getAttributeInt(
                 ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL
@@ -35,7 +46,7 @@ internal object ImageRenderer {
         } catch (_: Exception) {
             ExifInterface.ORIENTATION_NORMAL
         }
-        return Info(o.outWidth, o.outHeight, orientation)
+        return Info(bounds.outWidth, bounds.outHeight, orientation)
     }
 
     /** Maps stored pixel coords -> upright coords. */
@@ -71,6 +82,8 @@ internal object ImageRenderer {
             "Output format '$format' is not supported on Android"
         }
 
+        val hasAlpha = fmt == "png" || fmt == "webp"
+
         val info = readInfo(path)
         val (a, b, c, d, tx, ty) = affine
 
@@ -81,68 +94,109 @@ internal object ImageRenderer {
             setValues(floatArrayOf(a, c, tx, b, d, ty, 0f, 0f, 1f))
         })
 
-        // Region of the stored image that the output touches
+        // Decode at reduced resolution when the output is much smaller than the source.
+        val v = FloatArray(9).also { m.getValues(it) }
+        val scaleX = hypot(v[Matrix.MSCALE_X], v[Matrix.MSKEW_Y])
+        val scaleY = hypot(v[Matrix.MSKEW_X], v[Matrix.MSCALE_Y])
+        val sample = sampleSizeFor(max(scaleX, scaleY))
+
+        // Region of the stored image that the output canvas touches
         val inv = Matrix()
-        check(m.invert(inv)) { "Non-invertible transform" }
+        check(m.invert(inv)) { "Transform is not invertible" }
         val pts = floatArrayOf(
             0f, 0f, outW.toFloat(), 0f, outW.toFloat(), outH.toFloat(), 0f, outH.toFloat()
         )
         inv.mapPoints(pts)
-        var l = Float.MAX_VALUE; var t = Float.MAX_VALUE
-        var r = -Float.MAX_VALUE; var bt = -Float.MAX_VALUE
+        var minX = Float.MAX_VALUE
+        var minY = Float.MAX_VALUE
+        var maxX = -Float.MAX_VALUE
+        var maxY = -Float.MAX_VALUE
         for (i in pts.indices step 2) {
-            l = min(l, pts[i]); r = max(r, pts[i])
-            t = min(t, pts[i + 1]); bt = max(bt, pts[i + 1])
+            minX = min(minX, pts[i]); maxX = max(maxX, pts[i])
+            minY = min(minY, pts[i + 1]); maxY = max(maxY, pts[i + 1])
         }
+        val margin = 2 * sample
         val region = Rect(
-            max(0, floor(l).toInt() - 2),
-            max(0, floor(t).toInt() - 2),
-            min(info.storedW, ceil(r).toInt() + 2),
-            min(info.storedH, ceil(bt).toInt() + 2),
+            max(0, floor(minX).toInt() - margin),
+            max(0, floor(minY).toInt() - margin),
+            min(info.storedW, ceil(maxX).toInt() + margin),
+            min(info.storedH, ceil(maxY).toInt() + margin),
         )
         require(region.width() > 0 && region.height() > 0) { "Crop is outside the image" }
 
-        val regionBmp = decodeRegion(path, region)
-        val outBmp = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888)
+        val decoded = decode(path, region, sample)
+        val outBmp = createBitmap(outW, outH)
         try {
             val canvas = Canvas(outBmp)
-            if (fmt == "jpeg" || fmt == "jpg") canvas.drawColor(Color.WHITE)
-            // region bitmap coords -> stored coords, then through m
-            m.preTranslate(region.left.toFloat(), region.top.toFloat())
-            val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
-            canvas.drawBitmap(regionBmp, m, paint)
+            if (!hasAlpha) canvas.drawColor(Color.WHITE)
 
+            // piece pixels -> stored pixels -> output
+            val draw = Matrix(m)
+
+            draw.preTranslate(decoded.left, decoded.top)
+            draw.preScale(decoded.scaleX, decoded.scaleY)
+            val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
+            canvas.drawBitmap(decoded.bitmap, draw, paint)
+
+            val q = quality.coerceIn(1, 100)
             File(outputPath).parentFile?.mkdirs()
             FileOutputStream(outputPath).use { os ->
-                val ok = outBmp.compress(compressFormat(fmt, quality), quality.coerceIn(1, 100), os)
+                val ok = outBmp.compress(compressFormat(fmt, quality), q, os)
                 check(ok) { "Bitmap.compress failed" }
             }
         } finally {
-            regionBmp.recycle()
+            decoded.bitmap.recycle()
             outBmp.recycle()
         }
         return outputPath
     }
 
-    private fun decodeRegion(path: String, rect: Rect): Bitmap {
-        val opts = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 }
+    /** Largest power of two such that decoding at 1/n still has at least the output resolution. */
+    private fun sampleSizeFor(scale: Float): Int {
+        if (scale <= 0f) return 1
+        return Integer.highestOneBit(floor(1f / scale).toInt().coerceAtLeast(1))
+    }
+
+    private fun decode(path: String, region: Rect, sample: Int): Decoded {
+        val options = BitmapFactory.Options().apply {
+            inPreferredConfig = Bitmap.Config.ARGB_8888
+            inSampleSize = sample
+        }
+
         var decoder: BitmapRegionDecoder? = null
         try {
             decoder = openRegionDecoder(path)
-            val bmp = decoder?.decodeRegion(rect, opts)
-            if (bmp != null) return bmp
+            val bitmap = decoder?.decodeRegion(region, options)
+            if (bitmap != null) {
+                return Decoded(
+                    bitmap,
+                    region.left.toFloat(),
+                    region.top.toFloat(),
+                    region.width().toFloat() / bitmap.width,
+                    region.height().toFloat() / bitmap.height,
+                )
+            }
         } catch (_: Exception) {
-            // some formats (e.g. HEIC/AVIF on certain devices) don't support region decoding
+            // Some formats (for example HEIC on some devices) have no region decoder.
         } finally {
             decoder?.recycle()
         }
-        // Fallback: full decode, then cut out the region
-        val full = BitmapFactory.decodeFile(path, opts) ?: error("Decode failed")
-        return try {
-            Bitmap.createBitmap(full, rect.left, rect.top, rect.width(), rect.height())
-        } finally {
-            full.recycle()
-        }
+
+        // Fallback: decode the whole image (still subsampled), then cut the piece out.
+        val full = BitmapFactory.decodeFile(path, options) ?: error("Could not decode image: $path")
+        val l = (region.left / sample).coerceIn(0, full.width - 1)
+        val t = (region.top / sample).coerceIn(0, full.height - 1)
+        val r = ((region.right + sample - 1) / sample).coerceIn(l + 1, full.width)
+        val b = ((region.bottom + sample - 1) / sample).coerceIn(t + 1, full.height)
+        val piece = Bitmap.createBitmap(full, l, t, r - l, b - t)
+        if (piece !== full) full.recycle()
+        return Decoded(
+            piece,
+            (l * sample).toFloat(),
+            (t * sample).toFloat(),
+            sample.toFloat(),
+            sample.toFloat()
+        )
     }
 
     private fun openRegionDecoder(path: String): BitmapRegionDecoder? =
@@ -160,13 +214,11 @@ internal object ImageRenderer {
                 if (quality >= 100) Bitmap.CompressFormat.WEBP_LOSSLESS
                 else Bitmap.CompressFormat.WEBP_LOSSY
             } else {
-                legacyWebp()
+                Bitmap.CompressFormat.WEBP
             }
+
         else -> Bitmap.CompressFormat.JPEG
     }
-
-    @Suppress("DEPRECATION")
-    private fun legacyWebp() = Bitmap.CompressFormat.WEBP
 }
 
 private operator fun <T> List<T>.component6(): T = this[5]

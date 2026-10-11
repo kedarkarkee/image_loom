@@ -31,17 +31,18 @@ class ImageLoomPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             try {
                 val out: Any = when (call.method) {
                     "getImageSize" -> {
-                        val info = ImageRenderer.readInfo(call.argument<String>("path")!!)
+                        val info = ImageRenderer.readInfo(call.require("path"))
                         mapOf("width" to info.uprightW, "height" to info.uprightH)
                     }
+
                     else -> ImageRenderer.render(
-                        path = call.argument<String>("path")!!,
-                        outputPath = call.argument<String>("outputPath")!!,
-                        affine = call.argument<List<Number>>("affine")!!.map { it.toFloat() },
-                        outW = call.argument<Int>("outWidth")!!,
-                        outH = call.argument<Int>("outHeight")!!,
+                        path = call.require("path"),
+                        outputPath = call.require("outputPath"),
+                        affine = call.require<List<*>>("affine").map { (it as Number).toFloat() },
+                        outW = call.require<Number>("outWidth").toInt(),
+                        outH = call.require<Number>("outHeight").toInt(),
                         format = call.argument<String>("format") ?: "jpeg",
-                        quality = call.argument<Int>("quality") ?: 92,
+                        quality = call.argument<Number>("quality")?.toInt() ?: 92,
                     )
                 }
                 main.post { result.success(out) }
@@ -50,4 +51,7 @@ class ImageLoomPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             }
         }
     }
+
+    private fun <T> MethodCall.require(key: String): T =
+        argument<T>(key) ?: throw IllegalArgumentException("Missing argument: $key")
 }
