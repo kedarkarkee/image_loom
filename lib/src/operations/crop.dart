@@ -1,7 +1,11 @@
 part of '../image_operation.dart';
 
-/// Crops to [rect], given in the coordinates of the canvas at this point
-/// in the list. The part of [rect] outside the canvas is discarded.
+/// {@template image_operation.crop}
+///
+/// Crops to [rect], given in the coordinates of the canvas.
+/// The part of [rect] outside the canvas is discarded.
+///
+/// {@endtemplate}
 class Crop extends ImageOperation {
   const Crop(this.rect);
 
@@ -18,7 +22,11 @@ class Crop extends ImageOperation {
   }
 }
 
+/// {@template image_operation.cropToAspect}
+///
 /// Crops the largest area with the given [aspect] (width / height).
+///
+/// {@endtemplate}
 class CropToAspect extends ImageOperation {
   const CropToAspect(this.aspect, {this.alignment = Alignment.center});
 

@@ -1,6 +1,10 @@
 part of '../image_operation.dart';
 
+/// {@template image_operation.scale}
+///
 /// Scales the canvas by [factor], keeping the aspect ratio.
+///
+/// {@endtemplate}
 class Scale extends ImageOperation {
   const Scale(this.factor);
 
@@ -13,8 +17,12 @@ class Scale extends ImageOperation {
   }
 }
 
+/// {@template image_operation.scaleToFit}
+///
 /// Scales to fit inside [box] (contain) or to cover it ([cover]),
 /// keeping the aspect ratio.
+///
+/// {@endtemplate}
 class ScaleToFit extends ImageOperation {
   const ScaleToFit(this.box, {this.cover = false});
 

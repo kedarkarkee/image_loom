@@ -1,5 +1,10 @@
 part of '../image_operation.dart';
 
+/// {@template image_operation.skew}
+///
+/// Skew along horizontal or vertical axis
+///
+/// {@endtemplate}
 class Skew extends ImageOperation {
   const Skew({this.xDegrees = 0, this.yDegrees = 0});
 

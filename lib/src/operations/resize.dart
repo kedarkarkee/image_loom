@@ -1,6 +1,10 @@
 part of '../image_operation.dart';
 
+/// {@template image_operation.resize}
+///
 /// Scales the canvas to exactly [target].
+///
+/// {@endtemplate}
 class Resize extends ImageOperation {
   const Resize(this.target);
 

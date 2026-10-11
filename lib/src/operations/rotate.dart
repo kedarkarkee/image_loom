@@ -1,6 +1,10 @@
 part of '../image_operation.dart';
 
+/// {@template image_operation.rotate}
+///
 /// Rotates clockwise. The canvas grows to the bounding box of the rotated image.
+///
+/// {@endtemplate}
 class Rotate extends ImageOperation {
   const Rotate(this.degrees);
 

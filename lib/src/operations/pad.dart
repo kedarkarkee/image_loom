@@ -1,7 +1,11 @@
 part of '../image_operation.dart';
 
+/// {@template image_operation.pad}
+///
 /// Grows the canvas and keeps the content in place. The new area is empty
 /// (transparent for PNG, native decides the fill for formats without alpha).
+///
+/// {@endtemplate}
 class Pad extends ImageOperation {
   const Pad(this.padding);
 
