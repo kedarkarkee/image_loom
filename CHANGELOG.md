@@ -1,3 +1,5 @@
-## 0.0.1
+## 1.0.0
 
-* TODO: Describe initial release.
+* Initial release.
+* Edit images with a list of operations (flip, rotate, crop, resize, scale, pad, skew and more), rendered in one native pass.
+* Supports Android, iOS and macOS.
