@@ -1,13 +1,13 @@
 name: image_loom
 description: "Fast native image editing for Flutter: Compose crop, rotate, flip and resize operations and render them in one pass."
-version: 1.0.0
+version: 1.0.1
 homepage: https://github.com/kedarkarkee/image_loom
 repository: https://github.com/kedarkarkee/image_loom.git
 issue_tracker: https://github.com/kedarkarkee/image_loom/issues
 documentation: https://github.com/kedarkarkee/image_loom/blob/main/README.md
 
 environment:
-  sdk: ^3.13.5
+  sdk: ">=3.1.0 <4.0.0"
   flutter: '>=3.3.0'
 
 dependencies:
